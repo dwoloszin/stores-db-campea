@@ -176,7 +176,10 @@ def _standardize(url: str, html: str) -> Optional[Dict]:
     )
 
     product_id = sku or url.rstrip("/").rsplit("/", 1)[-1]
-    available = "InStock" in _first(_RE_AVAIL, window)
+    # availability sits in the Offer block ~3k chars after gtin13 — outside the
+    # narrow window — and there is exactly one per product page, so read it from
+    # the full html (window-scoped read left every product unavailable).
+    available = "InStock" in _first(_RE_AVAIL, html)
 
     return {
         "product_id":    product_id,
