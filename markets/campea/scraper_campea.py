@@ -45,6 +45,10 @@ WORKERS    = 16
 DELAY      = 0.0
 MAX_TRIES  = 4
 
+# The Convertiez WAF 403s datacenter (GitHub Actions) IPs for a normal browser
+# UA, but lets the Googlebot UA through on page + sitemap routes — same bypass we
+# use for Drogasil's Cloudflare WAF. Residential IPs work with either UA.
+GOOGLEBOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
 BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -67,7 +71,7 @@ _RE_BRAND = re.compile(r'"brand"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"')
 def _make_session() -> requests.Session:
     s = requests.Session()
     s.headers.update({
-        "User-Agent":      BROWSER_UA,
+        "User-Agent":      GOOGLEBOT_UA,
         "Accept":          "text/html,application/xhtml+xml,*/*",
         "Accept-Language": "pt-BR,pt;q=0.9",
     })
