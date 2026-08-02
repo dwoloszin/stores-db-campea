@@ -238,13 +238,28 @@ def _standardize(url: str, html: str) -> Optional[Dict]:
 # Main scrape
 # ──────────────────────────────────────────────────────────────────────────────
 
-def scrape(db, limit: Optional[int] = None, workers: int = WORKERS) -> Dict:
+def scrape(db, limit: Optional[int] = None, workers: int = WORKERS,
+           min_price: float = 0.0) -> Dict:
     session = _make_session()
 
-    print("Fetching product URLs from sitemap ...")
-    urls = fetch_product_urls(session)
-    if not urls:
-        return {"upserted": 0, "history_inserted": 0, "skipped_zero": 0, "total_unique": 0}
+    if min_price and min_price > 0:
+        # High-value refresh: only re-fetch pages for products the DB already
+        # knows are >= min_price. Campea is one HTTP request per product, so this
+        # trims a full ~19.8k-page run down to the handful of expensive items we
+        # actually track. New >= min_price products only appear via a full scrape
+        # (a price is unknown until its page is fetched), so run a full scrape
+        # periodically to seed them.
+        url_map = db.load_all_urls(min_price=min_price)
+        urls = list(url_map.values())
+        print(f"High-value mode: {len(urls):,} products with regular_price >= {min_price:.0f} (from DB)")
+        if not urls:
+            print("No products at/above the threshold yet — run a full scrape first to seed prices.")
+            return {"upserted": 0, "history_inserted": 0, "skipped_zero": 0, "total_unique": 0}
+    else:
+        print("Fetching product URLs from sitemap ...")
+        urls = fetch_product_urls(session)
+        if not urls:
+            return {"upserted": 0, "history_inserted": 0, "skipped_zero": 0, "total_unique": 0}
     if limit:
         urls = urls[:limit]
 
@@ -329,6 +344,9 @@ if __name__ == "__main__":
     parser.add_argument("--workers", type=int, default=WORKERS, help=f"Parallel workers (default: {WORKERS})")
     parser.add_argument("--csv",     action="store_true",       help="Also export a CSV file after scrape")
     parser.add_argument("--output",  type=str, default=None,    help="CSV path (implies --csv)")
+    parser.add_argument("--min-price", type=float, default=0.0, dest="min_price",
+                        help="High-value refresh: only re-fetch DB products with "
+                             "regular_price >= this (0 = full sitemap scrape)")
     parser.add_argument("--env",     type=str, default=".env",  help=".env file path")
     args = parser.parse_args()
 
@@ -336,7 +354,7 @@ if __name__ == "__main__":
     load_env(args.env)
 
     db    = CampeaDB()
-    stats = scrape(db, limit=args.limit, workers=args.workers)
+    stats = scrape(db, limit=args.limit, workers=args.workers, min_price=args.min_price)
     db.close()
 
     print(f"\nDone.")
